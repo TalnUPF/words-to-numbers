@@ -3,6 +3,8 @@ package org.jg.wordstonumbers;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Testing algorithm to convert words in paragraph representing numbers into
@@ -62,6 +64,9 @@ public class WordsToNumbersUtil {
 		return wordListToString(words);
 	}
 	
+	private static String cleanAndLowecaseWord(String word) {
+		return word.replaceAll("[^a-zA-Z\\s]", "").replaceAll("(\\t|\\r\\n|\\r|\\n)", "").toLowerCase();
+	}
 	
 	private static boolean reasonableNumber(String word, List<String> processingList) {
 		if (processingList.size() == 0) {
@@ -72,47 +77,74 @@ public class WordsToNumbersUtil {
 		}
 		
 		String previousWord = processingList.get(processingList.size() - 1);
+		String previousStripped = cleanAndLowecaseWord(previousWord);
 		
 		if (units.contains(word) || teens.contains(word) || tens.contains(word)) {
-			if(units.contains(previousWord) || teens.contains(previousWord)) {
+			if(units.contains(previousStripped) || teens.contains(previousStripped)) {
 				return false;
-			} else if (tens.contains(previousWord)) {
+			} else if (tens.contains(previousStripped)) {
 				if (units.contains(word)) {
 					return true;
 				} else {
 					return false;
 				}
-			} else if (previousWord.equals("a")) {
+			} else if (previousStripped.equals("a")) {
 				return false;
+			} else if (previousStripped.equals("and")) {
+				return reasonableNumber(word, processingList.subList(0, processingList.size() -1));
 			} else {
 				return true;
 			}
 		} else if(multipliersInOrder.contains(word)) {
-			if(multipliersInOrder.contains(previousWord)) {
+			if(multipliersInOrder.contains(previousStripped)) {
+				//check the previous multiplier, if bigger return true
 				int currentIndex = multipliersInOrder.indexOf(word);
-				int previousIndex = multipliersInOrder.indexOf(previousWord);
-				if (previousIndex > currentIndex) {
+				int previousIndex = multipliersInOrder.indexOf(previousStripped);
+				if (previousIndex != currentIndex) {
 					return true;
 				} else {
 					return false;
 				}
 			/*} else if ((teens.contains(previousWord) || tens.contains(previousWord)) && previousWord.equals("hundred")) {
-				//Weird case. For now allowed. E.g: twenty-five hundred = 2500*/
-			} else if (previousWord.equals("and")) {
+				//Weird case. Allowed for now. E.g: twenty-five hundred = 2500*/
+			} else if (previousStripped.equals("and")) {
 				return false;
-			} else if (previousWord.equals("a")) {
+			} else if (previousStripped.equals("a")) {
 				return true;
 			} else {
-				return true;
+				
+				int i = processingList.size()-1;
+				String previousMultiplier = null;
+				while (previousMultiplier == null && i >= 0) {
+					String iWord = processingList.get(i);
+					String iClean = cleanAndLowecaseWord(iWord);
+					if (multipliersInOrder.contains(iClean)) {
+						previousMultiplier = iClean;
+					}
+					i--;
+				}
+				if (previousMultiplier != null) {
+					//check the previous multiplier, if bigger return true
+					int currentIndex = multipliersInOrder.indexOf(word);
+					int previousIndex = multipliersInOrder.indexOf(previousMultiplier);
+					if (previousIndex != currentIndex) {
+						return true;
+					} else {
+						return false;
+					}
+				} else {
+					//if non existent return true
+					return true;
+				}
 			}
 		} else if(word.equals("and")) {
 			return true;
-		} else if(word.equals("a")){
+		} else if(word.equals("a")) {
 			return false;
 		}
 		return false;
 	}
-
+	
 	/**
 	 * Does the replacement of textual numbers, processing each word at a time
 	 * and grouping them before doing the conversion
@@ -126,6 +158,7 @@ public class WordsToNumbersUtil {
 		// "one" or "five hundred and two"
 		List<String> processingList = new LinkedList<String>();
 
+		boolean finalDot = false;
 		int i = 0;
 		while (i < words.size() || !processingList.isEmpty()) {
 
@@ -136,12 +169,14 @@ public class WordsToNumbersUtil {
 			}
 
 			// strip word of all punctuation to make it easier to process
-			String wordStripped = word.replaceAll("[^a-zA-Z\\s]", "").toLowerCase();
+			String wordStripped = cleanAndLowecaseWord(word);
 
 			// 2nd condition: skip "and" words by themselves and at start of num
-			if (allowedStrings.contains(wordStripped) && reasonableNumber(wordStripped, processingList)) {
+			if (!finalDot && allowedStrings.contains(wordStripped) && reasonableNumber(wordStripped, processingList)) {
 				words.remove(i); // remove from main list, will process later
 				processingList.add(word);
+				
+				finalDot = hasFinalDot(word);
 			} else if (processingList.size() > 0) {
 				// found end of group of textual words to process
 
@@ -161,6 +196,9 @@ public class WordsToNumbersUtil {
 	
 					processingList.clear();
 				}
+				
+				finalDot = false;
+				
 				i++;
 			} else {
 				i++;
@@ -168,6 +206,11 @@ public class WordsToNumbersUtil {
 		}
 
 		return words;
+	}
+
+	private static boolean hasFinalDot(String word) {
+		char lastChar = word.trim().charAt(word.trim().length() - 1);
+		return lastChar == '.';
 	}
 
 	/**
@@ -181,19 +224,38 @@ public class WordsToNumbersUtil {
 	 */
 	private static String retainPunctuation(List<String> processingList, String wordAsDigits) {
 
+		String reTrim = "(^[\\s]+)|([\\s]+$)";
+
+		// Create a Pattern object
+		Pattern r = Pattern.compile(reTrim);
+
+		String firstWord = processingList.get(0);
 		String lastWord = processingList.get(processingList.size() - 1);
-		char lastChar = lastWord.trim().charAt(lastWord.length() - 1);
+		
+		String initialTrim = "";
+		String finalTrim = "";
+		
+		Matcher m = r.matcher(firstWord);
+		if (m.find()) {
+			initialTrim = m.group(1) == null ? "" : m.group(1);
+		} 
+		
+		m = r.matcher(lastWord);
+		if (m.find()) {
+			finalTrim = m.group(2) == null ? "" : m.group(2);
+		} 
+		
+		char lastChar = lastWord.trim().charAt(lastWord.trim().length() - 1);
 		if (!Character.isLetter(lastChar)) {
 			wordAsDigits += lastChar;
 		}
 
-		String firstWord = processingList.get(0);
 		char firstChar = firstWord.trim().charAt(0);
 		if (!Character.isLetter(firstChar)) {
 			wordAsDigits = firstChar + wordAsDigits;
 		}
 
-		return wordAsDigits;
+		return initialTrim + wordAsDigits + finalTrim;
 	}
 
 	/**
@@ -203,14 +265,16 @@ public class WordsToNumbersUtil {
 	 * @return
 	 */
 	private static List<String> cleanAndTokenizeText(String sentence) {
+		//List<String> words = new LinkedList<String>(Arrays.asList(sentence.split(" +")));
 		List<String> words = new LinkedList<String>(Arrays.asList(sentence.split(" ")));
 
 		// remove hyphenated textual numbers
 		for (int i = 0; i < words.size(); i++) {
 			String str = words.get(i);
-			if (str.contains("-")) {
+			if (str.contains("-") || str.contains("\n") || str.contains("\t")) {
 				List<String> splitWords = Arrays.asList(str.split("-"));
-
+			/*if (str.contains("-") || str.contains("\n") || str.contains("\t")) {
+				List<String> splitWords = Arrays.asList(str.split("-|\\s"));*/
 				// just check the first word is a textual number. Caters for
 				// "twenty-five," without having to strip the comma
 				if (splitWords.size() > 1 && allowedStrings.contains(splitWords.get(0))) {
@@ -260,10 +324,8 @@ public class WordsToNumbersUtil {
 		long intermediateResult = 0;
 		for (String str : words) {
 			// clean up string for easier processing
-			str = str.toLowerCase().replaceAll("[^a-zA-Z\\s]", "");
-			if (str.equalsIgnoreCase("a")) {
-				intermediateResult += 1;
-			} else if (str.equalsIgnoreCase("zero")) {
+			str = cleanAndLowecaseWord(str);
+			if (str.equalsIgnoreCase("zero")) {
 				intermediateResult += 0;
 			} else if (str.equalsIgnoreCase("one")) {
 				intermediateResult += 1;
@@ -320,20 +382,35 @@ public class WordsToNumbersUtil {
 			} else if (str.equalsIgnoreCase("ninety")) {
 				intermediateResult += 90;
 			} else if (str.equalsIgnoreCase("hundred")) {
+				if (intermediateResult == 0) {
+					intermediateResult = 1;
+				}
 				intermediateResult *= 100;
 			} else if (str.equalsIgnoreCase("thousand")) {
+				if (intermediateResult == 0) {
+					intermediateResult = 1;
+				}
 				intermediateResult *= 1000;
 				finalResult += intermediateResult;
 				intermediateResult = 0;
 			} else if (str.equalsIgnoreCase("million")) {
+				if (intermediateResult == 0) {
+					intermediateResult = 1;
+				}
 				intermediateResult *= 1000000;
 				finalResult += intermediateResult;
 				intermediateResult = 0;
 			} else if (str.equalsIgnoreCase("billion")) {
+				if (intermediateResult == 0) {
+					intermediateResult = 1;
+				}
 				intermediateResult *= 1000000000;
 				finalResult += intermediateResult;
 				intermediateResult = 0;
 			} else if (str.equalsIgnoreCase("trillion")) {
+				if (intermediateResult == 0) {
+					intermediateResult = 1;
+				}
 				intermediateResult *= 1000000000000L;
 				finalResult += intermediateResult;
 				intermediateResult = 0;
