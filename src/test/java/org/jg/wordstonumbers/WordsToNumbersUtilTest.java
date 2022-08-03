@@ -68,7 +68,7 @@ public class WordsToNumbersUtilTest {
 	}
 	
 	@Test
-	   public void testWordsToNumbersUtil() {
-	      assertEquals(expectedResult, WordsToNumbersUtil.convertTextualNumbersInDocument(input));
-	   }
+	public void testWordsToNumbersUtil() {
+		assertEquals(expectedResult, WordsToNumbersUtil.convertTextualNumbersInDocument(input));
+	}
 }

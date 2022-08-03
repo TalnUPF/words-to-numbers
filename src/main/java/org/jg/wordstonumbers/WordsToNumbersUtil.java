@@ -15,7 +15,19 @@ import java.util.List;
  *
  */
 public class WordsToNumbersUtil {
-	final static List<String> allowedStrings = Arrays.asList("and", "zero", "one", "two", "three", "four", "five",
+	
+	final static List<String> units = Arrays.asList("zero", "one", "two", "three", "four", "five",
+			"six", "seven", "eight", "nine");
+	
+	final static List<String> teens = Arrays.asList("eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+			"seventeen", "eighteen", "nineteen");
+	
+	final static List<String> tens = Arrays.asList("ten", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty",
+			"ninety");
+	
+	final static List<String> multipliersInOrder = Arrays.asList("hundred", "thousand", "million", "billion", "trillion");
+	
+	final static List<String> allowedStrings = Arrays.asList("a", "and", "zero", "one", "two", "three", "four", "five",
 			"six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
 			"seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty",
 			"ninety", "hundred", "thousand", "million", "billion", "trillion");
@@ -49,6 +61,57 @@ public class WordsToNumbersUtil {
 		// text except from textual numbers
 		return wordListToString(words);
 	}
+	
+	
+	private static boolean reasonableNumber(String word, List<String> processingList) {
+		if (processingList.size() == 0) {
+			if (multipliersInOrder.contains(word)) {
+				processingList.add("one");
+			}
+			return !word.equals("and");
+		}
+		
+		String previousWord = processingList.get(processingList.size() - 1);
+		
+		if (units.contains(word) || teens.contains(word) || tens.contains(word)) {
+			if(units.contains(previousWord) || teens.contains(previousWord)) {
+				return false;
+			} else if (tens.contains(previousWord)) {
+				if (units.contains(word)) {
+					return true;
+				} else {
+					return false;
+				}
+			} else if (previousWord.equals("a")) {
+				return false;
+			} else {
+				return true;
+			}
+		} else if(multipliersInOrder.contains(word)) {
+			if(multipliersInOrder.contains(previousWord)) {
+				int currentIndex = multipliersInOrder.indexOf(word);
+				int previousIndex = multipliersInOrder.indexOf(previousWord);
+				if (previousIndex > currentIndex) {
+					return true;
+				} else {
+					return false;
+				}
+			/*} else if ((teens.contains(previousWord) || tens.contains(previousWord)) && previousWord.equals("hundred")) {
+				//Weird case. For now allowed. E.g: twenty-five hundred = 2500*/
+			} else if (previousWord.equals("and")) {
+				return false;
+			} else if (previousWord.equals("a")) {
+				return true;
+			} else {
+				return true;
+			}
+		} else if(word.equals("and")) {
+			return true;
+		} else if(word.equals("a")){
+			return false;
+		}
+		return false;
+	}
 
 	/**
 	 * Does the replacement of textual numbers, processing each word at a time
@@ -76,7 +139,7 @@ public class WordsToNumbersUtil {
 			String wordStripped = word.replaceAll("[^a-zA-Z\\s]", "").toLowerCase();
 
 			// 2nd condition: skip "and" words by themselves and at start of num
-			if (allowedStrings.contains(wordStripped) && !(processingList.size() == 0 && wordStripped.equals("and"))) {
+			if (allowedStrings.contains(wordStripped) && reasonableNumber(wordStripped, processingList)) {
 				words.remove(i); // remove from main list, will process later
 				processingList.add(word);
 			} else if (processingList.size() > 0) {
@@ -84,19 +147,21 @@ public class WordsToNumbersUtil {
 
 				//if "and" is the last word, add it back in to original list
 				String lastProcessedWord = processingList.get(processingList.size() - 1);
-				if (lastProcessedWord.equals("and")) {
-					words.add(i, "and");
+				if (lastProcessedWord.equals("and") || lastProcessedWord.equals("a")) {
+					words.add(i, lastProcessedWord);
 					processingList.remove(processingList.size() - 1);
 				}
 
-				// main logic here, does the actual conversion
-				String wordAsDigits = String.valueOf(convertWordsToNum(processingList));
-				
-				wordAsDigits = retainPunctuation(processingList, wordAsDigits);
-				words.add(i, String.valueOf(wordAsDigits));
-
-				processingList.clear();
-				i += 2;
+				if (processingList.size() > 0) {
+					// main logic here, does the actual conversion
+					String wordAsDigits = String.valueOf(convertWordsToNum(processingList));
+					
+					wordAsDigits = retainPunctuation(processingList, wordAsDigits);
+					words.add(i, String.valueOf(wordAsDigits));
+	
+					processingList.clear();
+				}
+				i++;
 			} else {
 				i++;
 			}
@@ -196,7 +261,9 @@ public class WordsToNumbersUtil {
 		for (String str : words) {
 			// clean up string for easier processing
 			str = str.toLowerCase().replaceAll("[^a-zA-Z\\s]", "");
-			if (str.equalsIgnoreCase("zero")) {
+			if (str.equalsIgnoreCase("a")) {
+				intermediateResult += 1;
+			} else if (str.equalsIgnoreCase("zero")) {
 				intermediateResult += 0;
 			} else if (str.equalsIgnoreCase("one")) {
 				intermediateResult += 1;
